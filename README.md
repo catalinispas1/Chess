@@ -6,3 +6,4 @@ Basic Chess Rules: The game enforces the basic rules of chess, including piece m
 Pawn Promotion: When a pawn reaches the opposite end of the board, it can be promoted to a queen, rook, bishop, or knight.
 Piece Capturing: When a piece captures an opponent's piece, it is removed from the board.
 Move Validation: Invalid moves are not allowed, and players are notified of any invalid moves they attempt.
+Drag and drop to move a piece.
