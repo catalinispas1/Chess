@@ -2,9 +2,11 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.Arrays;
 
 public class GamePanel extends JPanel implements ActionListener {
     final int size = 800;
+    final int frameWidth = 1200;
     final int gameUnit = size/8;
     Pieces[] pieces;
     String[][] chessBoard;
@@ -20,13 +22,52 @@ public class GamePanel extends JPanel implements ActionListener {
     int blackRookAlived = 56;
     int xPawnUpgrade;
     int yPawnUpgrade;
-    Point movedPosition;
-    Point initialPosition;
+    int colorPressedX = -1;
+    int colorPressedY = -1;
+    int colorReleasedX = -1;
+    int colorReleasedY = -1;
+    Timer timer;
+    static boolean whiteWon;
+    static boolean blackWon;
+    boolean whiteChess;
+    boolean blackChess;
+    static boolean staleMate;
+    boolean checkWhite;
+    boolean checkBlack;
+    static boolean gameRunning;
+    boolean pieceMoved;
+    Pieces deadPiece;
+    static JButton play;
     GamePanel(){
-        this.setPreferredSize(new Dimension(size,size));
+        this.setBackground(new Color(0,0,0));
+        this.setPreferredSize(new Dimension(frameWidth,size));
+        timer = new Timer();
+        play = new JButton();
+        play = new JButton("Start Game");
+        play.setLocation(910, size/2 - 25);
+        play.setSize(200, 50);
+        this.add(play);
+        play.setVisible(true);
+        play.addActionListener(this);
+        play.setFocusPainted(false);
+        startGame();
+    }
+
+    public void resetGame(){
+        for (Pieces pieces: pieces){
+            pieces.imageCorner = new Point(-200, - 600);
+            pieces.deadPiece = true;
+        }
+        for (Pieces sparePieces: sparePieces){
+            sparePieces.imageCorner = new Point(-200, - 600);
+            sparePieces.deadPiece = true;
+        }
+        Arrays.fill(pieces, null);
+        Arrays.fill(sparePieces, null);
+    }
+    public void startGame(){
         pieces = new Pieces[32];
         chessBoard = new String[size/gameUnit][size/gameUnit];
-
         int xPosition = 0;
         for(int i = 0; i < 8; i++){
             pieces[i] = new Pieces(new ImageIcon("BlackPieces/pion negru.png").getImage(),xPosition, gameUnit, this, "black", "pawn", false);
@@ -59,7 +100,6 @@ public class GamePanel extends JPanel implements ActionListener {
         pieces[30] = new Pieces(new ImageIcon("WhitePieces/rege alb.png").getImage(), gameUnit * 4, gameUnit * 7, this, "white", "king", false);
         pieces[31] = new Pieces(new ImageIcon("BlackPieces/rege negru.png").getImage(), gameUnit * 4, 0, this, "black", "king", false);
 
-
         this.setLayout(null);
         upgradeButton = new JButton[4];
         upgradeButton[0] = new JButton("Queen");
@@ -75,14 +115,12 @@ public class GamePanel extends JPanel implements ActionListener {
         upgradeButton[3].setLocation(size / 2 + 100, size / 2 - 12);
 
 
-
         for (JButton button : upgradeButton) {
             button.setSize(100, 25);
             this.add(button);
             button.setVisible(false);
             button.addActionListener(this);
         }
-
         sparePieces = new Pieces[64];
         for(int i = 0; i < 8; i++){
             sparePieces[i] = new Pieces(new ImageIcon("WhitePieces/regina alba.png").getImage(), -250, -250, this, "white", "queen", true);
@@ -108,19 +146,18 @@ public class GamePanel extends JPanel implements ActionListener {
         for(int i = 56; i < 64; i++){
             sparePieces[i] = new Pieces(new ImageIcon("BlackPieces/tura neagra.png").getImage(), -250, -250, this, "black", "rook", true);
         }
-        movedPosition = new Point(-1, -1);
-        initialPosition = new Point(-1, -1);
     }
-
     public void paintComponent(Graphics g){
         super.paintComponent(g);
         draw(g);
+        timer.draw(g);
         for(Pieces pieces: pieces){
             pieces.draw(g);
         }
         for(Pieces pieces: sparePieces){
             pieces.draw(g);
         }
+        repaint();
     }
 
     public void draw(Graphics g){
@@ -130,8 +167,17 @@ public class GamePanel extends JPanel implements ActionListener {
                 if(drawSquares % 2 == 0){
                     g.setColor(new Color(225, 217, 217));
                     g.fillRect(i,j,gameUnit,gameUnit);
-                }else {
+                } else if (drawSquares % 2 == 1){
                     g.setColor(new Color(55, 73, 43));
+                    g.fillRect(i,j,gameUnit,gameUnit);
+                }
+
+                if (colorPressedX == i && colorPressedY == j) {
+                    g.setColor(new Color(255, 252, 114, 255));
+                    g.fillRect(i,j,gameUnit,gameUnit);
+                }
+                if (colorReleasedX == i && colorReleasedY == j) {
+                    g.setColor(new Color(255, 252, 114, 255));
                     g.fillRect(i,j,gameUnit,gameUnit);
                 }
                 drawSquares++;
@@ -148,7 +194,7 @@ public class GamePanel extends JPanel implements ActionListener {
         this.yPawnUpgrade = y;
     }
 
-    public Pieces setDeadPiece(int x, int y){
+    public Pieces setDeadPiece(int x, int y) {
         for (Pieces pieces: pieces){
             if(pieces.imageCorner.getX() == x && pieces.imageCorner.getY() == y && !pieces.legalMoveMade){
                 pieces.deadPiece = true;
@@ -160,7 +206,6 @@ public class GamePanel extends JPanel implements ActionListener {
             if(pieces.imageCorner.getX() == x && pieces.imageCorner.getY() == y && !pieces.legalMoveMade){
                 pieces.deadPiece = true;
                 pieces.imageCorner = new Point(-250,-250);
-                System.out.println("piece found and killer");
                 return pieces;
             }
         }
@@ -180,16 +225,7 @@ public class GamePanel extends JPanel implements ActionListener {
 
         boolean[][] movableMap = new boolean[size / gameUnit][size / gameUnit];
 
-        for(Pieces pieces: pieces){
-            if(pieces.color.equals("black") && !pieces.deadPiece){
-                pieces.chess(movableMap, (int) pieces.imageCorner.getX() / gameUnit, (int) pieces.imageCorner.getY() / gameUnit, whiteKingX, whiteKingY);
-            }
-        }
-        for(Pieces pieces: sparePieces){
-            if(pieces.color.equals("black") && !pieces.deadPiece){
-                pieces.chess(movableMap, (int) pieces.imageCorner.getX() / gameUnit, (int) pieces.imageCorner.getY() / gameUnit, whiteKingX, whiteKingY);
-            }
-        }
+        searchCheck("black", movableMap, whiteKingX, whiteKingY);
         return movableMap[whiteKingY][whiteKingX];
     }
 
@@ -198,28 +234,243 @@ public class GamePanel extends JPanel implements ActionListener {
 
         int blackKingX = (int) pieces[31].imageCorner.getX() / gameUnit;
         int blackKingY = (int) pieces[31].imageCorner.getY() / gameUnit;
+
         boolean[][] movableMap = new boolean[size / gameUnit][size / gameUnit];
 
+        searchCheck("white", movableMap, blackKingX, blackKingY);
+        return movableMap[blackKingY][blackKingX];
+    }
+
+    public boolean checkMate(String color) {
+        for (int i = 0; i < chessBoard.length; i++) {
+            for (int j = 0; j < chessBoard[i].length; j++) {
+                for (Pieces pieces: pieces) {
+                    pieces.legalMoveMade = false;
+                    if(pieces.color.equals(color) && !pieces.deadPiece) {
+
+                        pieces.initialPoint = new Point(pieces.imageCorner);
+                        pieces.imageCorner = new Point(j, i);
+                        String tempColor = chessBoard[i][j];
+                        if (pieces.validMove(j * gameUnit, i * gameUnit)) {
+                            pieces.imageCorner = new Point(pieces.initialPoint);
+
+                            if (tempColor != null) setAlive(deadPiece, j * gameUnit, i * gameUnit);
+                            chessBoard[i][j] = tempColor;
+                            chessBoard[(int) pieces.imageCorner.getY() / gameUnit][(int) pieces.imageCorner.getX() / gameUnit] = color;
+                            repaint();
+                            return false;
+                        }
+                    }
+                }
+                for(Pieces sparePieces: sparePieces) {
+                    if(sparePieces.color.equals(color) && !sparePieces.deadPiece) {
+
+                        sparePieces.initialPoint = new Point(sparePieces.imageCorner);
+                        sparePieces.imageCorner = new Point(j, i);
+                        String tempColor = chessBoard[i][j];
+
+
+                        if (sparePieces.validMove(j, i)) {
+                            sparePieces.imageCorner = new Point(sparePieces.initialPoint);
+                            if (tempColor != null) setAlive(deadPiece, j * gameUnit, i * gameUnit);
+                            chessBoard[i][j] = tempColor;
+                            chessBoard[(int) sparePieces.imageCorner.getY() / gameUnit][(int) sparePieces.imageCorner.getX() / gameUnit] = color;
+                            repaint();
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    public boolean whiteKingInvalidMoves(){
+        boolean[][] movableMap = new boolean[size / gameUnit][size / gameUnit];
+        int kingX = (int) pieces[30].imageCorner.getX() / gameUnit;
+        int kingY = (int) pieces[30].imageCorner.getY() / gameUnit;
+
+        searchCheck("black", movableMap, kingX - 1, kingY);
+        searchCheck("black", movableMap, kingX - 1, kingY + 1);
+        searchCheck("black", movableMap, kingX, kingY - 1);
+        searchCheck("black", movableMap, kingX + 1, kingY - 1);
+        searchCheck("black", movableMap, kingX + 1, kingY);
+        searchCheck("black", movableMap, kingX + 1, kingY + 1);
+        searchCheck("black", movableMap, kingX, kingY + 1);
+        searchCheck("black", movableMap, kingX - 1, kingY - 1);
+
+        boolean left;
+        if(indexLimit(kingY, kingX - 1)) {
+            left = movableMap[kingY][kingX - 1];
+        } else left = true;
+        boolean leftBlocked = checkForBlockedKing(kingY, kingX, "white");
+
+        boolean leftUp;
+        if(indexLimit(kingY + 1, kingX - 1)) {
+            leftUp = movableMap[kingY + 1][kingX - 1];
+        } else leftUp = true;
+        boolean leftUpBlocked = checkForBlockedKing(kingY + 1, kingX - 1, "white");
+
+        boolean up;
+        if(indexLimit(kingY - 1, kingX)) {
+            up = movableMap[kingY - 1][kingX];
+        } else up = true;
+        boolean upBlocked = checkForBlockedKing(kingY - 1, kingX, "white");
+
+        boolean upRight;
+        if(indexLimit(kingY - 1, kingX + 1)) {
+            upRight = movableMap[kingY - 1][kingX + 1];
+        } else upRight = true;
+        boolean upRightBlocked = checkForBlockedKing(kingY - 1, kingX + 1, "white");
+
+        boolean right;
+        if(indexLimit(kingY, kingX + 1)) {
+            right = movableMap[kingY][kingX + 1];
+        } else right = true;
+        boolean rightBlocked = checkForBlockedKing(kingY, kingX + 1, "white");
+
+        boolean rightDown;
+        if(indexLimit(kingY + 1, kingX + 1)) {
+            rightDown = movableMap[kingY + 1][kingX + 1];
+        } else rightDown = true;
+        boolean rightDownBlocked = checkForBlockedKing(kingY + 1, kingX + 1, "white");
+
+        boolean down;
+        if(indexLimit(kingY + 1, kingX)) {
+            down = movableMap[kingY + 1][kingX];
+        } else down = true;
+        boolean downBlocked = checkForBlockedKing(kingY + 1, kingX, "white");
+
+        boolean downLeft;
+        if(indexLimit(kingY - 1, kingX - 1)) {
+            downLeft = movableMap[kingY - 1][kingX - 1];
+        } else downLeft = true;
+        boolean downLeftBlocked = checkForBlockedKing(kingY - 1, kingX - 1, "white");
+
+        if (leftBlocked && leftUpBlocked && upBlocked && upRightBlocked && rightBlocked && rightDownBlocked && downBlocked && downLeftBlocked) return false;
+        return  (left || leftBlocked) && (leftUp || leftUpBlocked) && (up || upBlocked) && (upRight || upRightBlocked) && (right || rightBlocked) && (rightDown || rightDownBlocked) && (down || downBlocked) && (downLeft || downLeftBlocked);
+    }
+
+    public boolean blackKingInvalidMoves(){
+        boolean[][] movableMap = new boolean[size / gameUnit][size / gameUnit];
+        int kingX = (int) pieces[31].imageCorner.getX() / gameUnit;
+        int kingY = (int) pieces[31].imageCorner.getY() / gameUnit;
+
+        searchCheck("white", movableMap, kingX - 1, kingY);
+        searchCheck("white", movableMap, kingX - 1, kingY + 1);
+        searchCheck("white", movableMap, kingX, kingY - 1);
+        searchCheck("white", movableMap, kingX + 1, kingY - 1);
+        searchCheck("white", movableMap, kingX + 1, kingY);
+        searchCheck("white", movableMap, kingX + 1, kingY + 1);
+        searchCheck("white", movableMap, kingX, kingY + 1);
+        searchCheck("white", movableMap, kingX - 1, kingY - 1);
+
+
+        boolean left;
+        if(indexLimit(kingY, kingX - 1)) {
+            left = movableMap[kingY][kingX - 1];
+        } else left = true;
+        boolean leftBlocked = checkForBlockedKing(kingY, kingX, "black");
+
+        boolean leftUp;
+        if(indexLimit(kingY + 1, kingX - 1)) {
+            leftUp = movableMap[kingY + 1][kingX - 1];
+        } else leftUp = true;
+        boolean leftUpBlocked = checkForBlockedKing(kingY + 1, kingX - 1, "black");
+
+        boolean up;
+        if(indexLimit(kingY - 1, kingX)) {
+            up = movableMap[kingY - 1][kingX];
+        } else up = true;
+        boolean upBlocked = checkForBlockedKing(kingY - 1, kingX, "black");
+
+        boolean upRight;
+        if(indexLimit(kingY - 1, kingX + 1)) {
+            upRight = movableMap[kingY - 1][kingX + 1];
+        } else upRight = true;
+        boolean upRightBlocked = checkForBlockedKing(kingY - 1, kingX + 1, "black");
+
+        boolean right;
+        if(indexLimit(kingY, kingX + 1)) {
+            right = movableMap[kingY][kingX + 1];
+        } else right = true;
+        boolean rightBlocked = checkForBlockedKing(kingY, kingX + 1, "black");
+
+        boolean rightDown;
+        if(indexLimit(kingY + 1, kingX + 1)) {
+            rightDown = movableMap[kingY + 1][kingX + 1];
+        } else rightDown = true;
+        boolean rightDownBlocked = checkForBlockedKing(kingY + 1, kingX + 1, "black");
+
+        boolean down;
+        if(indexLimit(kingY + 1, kingX)) {
+            down = movableMap[kingY + 1][kingX];
+        } else down = true;
+        boolean downBlocked = checkForBlockedKing(kingY + 1, kingX, "black");
+
+        boolean downLeft;
+        if(indexLimit(kingY - 1, kingX - 1)) {
+            downLeft = movableMap[kingY - 1][kingX - 1];
+        } else downLeft = true;
+        boolean downLeftBlocked = checkForBlockedKing(kingY - 1, kingX - 1, "black");
+
+        if (leftBlocked && leftUpBlocked && upBlocked && upRightBlocked && rightBlocked && rightDownBlocked && downBlocked && downLeftBlocked) return false;
+
+        return  (left || leftBlocked) && (leftUp || leftUpBlocked) && (up || upBlocked) && (upRight || upRightBlocked) && (right || rightBlocked) && (rightDown || rightDownBlocked) && (down || downBlocked) && (downLeft || downLeftBlocked);
+    }
+
+    private boolean indexLimit(int kingY, int kingX){
+        return (kingX >= 0 && kingX < chessBoard.length) && (kingY >= 0 && kingY < chessBoard.length);
+    }
+
+    private boolean checkForBlockedKing(int kingY, int kingX, String color){
+        if(!indexLimit(kingY, kingX)) return false;
+        if(chessBoard[kingY][kingX] == null) return false;
+        return chessBoard[kingY][kingX].equals(color);
+    }
+
+    private void searchCheck(String color, boolean[][] movableMap, int kingX, int kingY) {
+        if(kingX < 0 || kingX > movableMap.length - 1 || kingY < 0 || kingY > movableMap.length - 1) return;
         for(Pieces pieces: pieces){
-            if(pieces.color.equals("white") && !pieces.deadPiece){
-                pieces.chess(movableMap, (int) pieces.imageCorner.getX() / gameUnit, (int) pieces.imageCorner.getY() / gameUnit, blackKingX, blackKingY);
+            if(pieces.color.equals(color) && !pieces.deadPiece){
+                pieces.chess(movableMap, (int) pieces.imageCorner.getX() / gameUnit, (int) pieces.imageCorner.getY() / gameUnit, kingX, kingY);
             }
         }
         for(Pieces pieces: sparePieces){
-            if(pieces.color.equals("white") && !pieces.deadPiece){
-                pieces.chess(movableMap, (int) pieces.imageCorner.getX() / gameUnit, (int) pieces.imageCorner.getY() / gameUnit, blackKingX, blackKingY);
+            if(pieces.color.equals(color) && !pieces.deadPiece) {
+                pieces.chess(movableMap, (int) pieces.imageCorner.getX() / gameUnit, (int) pieces.imageCorner.getY() / gameUnit, kingX, kingY);
             }
         }
-        return movableMap[blackKingY][blackKingX];
     }
 
     public boolean checkKingCaptured(int x, int y){
         return ((int) pieces[30].imageCorner.getX() == x * gameUnit && (int) pieces[30].imageCorner.getY() == y * gameUnit) ||
                 ((int) pieces[31].imageCorner.getX() == x * gameUnit && (int) pieces[31].imageCorner.getY() == y * gameUnit);
     }
-
+    boolean playPressed;
     @Override
     public void actionPerformed(ActionEvent e) {
+        if (e.getSource() == play) {
+            timer = new Timer();
+            timer.start();
+            gameRunning = true;
+            play.setVisible(false);
+            play.setText("Play Again");
+            whiteWon = false;
+            blackWon = false;
+            staleMate = false;
+            if(playPressed) {
+                colorReleasedX = -1;
+                colorReleasedY = -1;
+                colorPressedX = -1;
+                colorPressedY = -1;
+                resetGame();
+                startGame();
+            }
+            playPressed = true;
+            return;
+        }
+
         for (Pieces pieces: pieces){
             if(pieces.imageCorner.getX() == xPawnUpgrade && pieces.imageCorner.getY() == yPawnUpgrade){
                 pieces.deadPiece = true;
@@ -258,6 +509,31 @@ public class GamePanel extends JPanel implements ActionListener {
             } else {
                 setAlive(sparePieces[blackRookAlived], xPawnUpgrade, yPawnUpgrade);
                 blackRookAlived++;
+            }
+        }
+
+        whiteChess = whiteChessCheck();
+        blackChess = blackChessCheck();
+
+        if (whiteChess) {
+            if (checkMate("white")) {
+                GamePanel.blackWon = true;
+                GamePanel.gameRunning = false;
+                GamePanel.play.setVisible(true);
+            }
+        } else if (blackChess) {
+            if (checkMate("black")) {
+                GamePanel.whiteWon = true;
+                GamePanel.gameRunning = false;
+                GamePanel.play.setVisible(true);
+            }
+        }
+
+        if ((whiteKingInvalidMoves() || blackKingInvalidMoves()) && (!whiteChess && !blackChess)){
+            if (checkMate("white")) {
+                GamePanel.staleMate = true;
+                GamePanel.gameRunning = false;
+                GamePanel.play.setVisible(true);
             }
         }
 

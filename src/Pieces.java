@@ -18,9 +18,10 @@ public class Pieces implements ImageObserver{
     boolean pieceSelected;
     boolean deadPiece;
     boolean legalMoveMade;
-    static private int getTurn;
+    static int getTurn;
     static boolean kingChess;
     static boolean upgradingPiece;
+    static boolean hovering;
 
     Pieces(Image image, int xPosition, int yPosition, GamePanel gamePanel, String color, String pieceType, boolean deadPiece){
         this.deadPiece = deadPiece;
@@ -46,75 +47,114 @@ public class Pieces implements ImageObserver{
     private class ClickListener extends MouseAdapter{
         @Override
         public void mousePressed(MouseEvent e) {
+            if(hovering) return;
             previousPoint = e.getPoint();
             pieceSelected = containsPiece(previousPoint);
             if(pieceSelected){
                 initialPoint = new Point(imageCorner);
+
+                if(getTurn % 2 == 0 && color.equals("white")) {
+                    gamePanel.colorPressedX = (int) imageCorner.getX();
+                    gamePanel.colorPressedY = (int) imageCorner.getY();
+                } else if(getTurn % 2 == 1 && color.equals("black")) {
+                    gamePanel.colorPressedX = (int) imageCorner.getX();
+                    gamePanel.colorPressedY = (int) imageCorner.getY();
+                }
             }
             legalMoveMade = false;
-
         }
         @Override
         public void mouseReleased(MouseEvent e) {
             if(pieceSelected){
-                int newImageX = (int) (previousPoint.getX()) / gamePanel.gameUnit * gamePanel.gameUnit;
-                int newImageY = (int) (previousPoint.getY()) / gamePanel.gameUnit * gamePanel.gameUnit;
-
-                if(isLegalMove(newImageX / gamePanel.gameUnit, newImageY / gamePanel.gameUnit)) {
-                    imageCorner = new Point(newImageX, newImageY);
-                    legalMoveMade = true;
-
-                    boolean pieceKilled = false;
-                    boolean chess = false;
-                    Pieces piece = null;
-                    String tempColor = null;
-
-                    if(gamePanel.chessBoard[newImageY / gamePanel.gameUnit] [newImageX / gamePanel.gameUnit] != null){
-                        tempColor = gamePanel.chessBoard[newImageY / gamePanel.gameUnit] [newImageX / gamePanel.gameUnit];
-                        pieceKilled = true;
-                        piece = gamePanel.setDeadPiece(newImageX, newImageY);
-                        imageCorner = new Point(newImageX, newImageY);
-                    }
-
-                    gamePanel.chessBoard[newImageY / gamePanel.gameUnit] [newImageX / gamePanel.gameUnit] = color;
-                    gamePanel.chessBoard[(int)initialPoint.getY() / gamePanel.gameUnit] [(int)initialPoint.getX() / gamePanel.gameUnit] = null;
-
-                    if(color.equals("white") && gamePanel.whiteChessCheck()) {
-                        imageCorner = new Point(initialPoint);
-                        gamePanel.chessBoard[(int) initialPoint.getY() / gamePanel.gameUnit][(int) initialPoint.getX() / gamePanel.gameUnit] = color;
-                        gamePanel.chessBoard[newImageY / gamePanel.gameUnit][newImageX / gamePanel.gameUnit] = tempColor;
-                        getTurn--;
-                        chess = true;
-                    } else if (color.equals("black") && gamePanel.blackChessCheck()) {
-                        imageCorner = new Point(initialPoint);
-                        gamePanel.chessBoard[(int)initialPoint.getY() / gamePanel.gameUnit] [(int)initialPoint.getX() / gamePanel.gameUnit] = color;
-                        gamePanel.chessBoard[newImageY / gamePanel.gameUnit] [newImageX / gamePanel.gameUnit] = tempColor;
-                        getTurn--;
-                        chess = true;
-                    }
-
-                    if(pieceKilled && chess){
-                        gamePanel.setAlive(piece, newImageX, newImageY);
-                    }
-
-                    if(pieceType.equals("pawn")){
-                        pawnFirstMove = true;
-
-                        if((int) imageCorner.getY() / gamePanel.gameUnit == 0 || (int) imageCorner.getY() / gamePanel.gameUnit == 7){
-                            gamePanel.upgradePiece(newImageX, newImageY);
-                            upgradingPiece = true;
+                boolean movepiece = validMove((int) (previousPoint.getX()) / gamePanel.gameUnit * gamePanel.gameUnit, (int) (previousPoint.getY()) / gamePanel.gameUnit * gamePanel.gameUnit);
+                if(movepiece) {
+                    if (pieceType.equals("pawn")) pawnFirstMove = true;
+                    getTurn++;
+                    gamePanel.colorReleasedX = (int) (previousPoint.getX()) / gamePanel.gameUnit * gamePanel.gameUnit;
+                    gamePanel.colorReleasedY = (int) (previousPoint.getY()) / gamePanel.gameUnit * gamePanel.gameUnit;
+                    if (gamePanel.whiteChess) {
+                        if (gamePanel.checkMate("white")) {
+                            GamePanel.blackWon = true;
+                            GamePanel.gameRunning = false;
+                            GamePanel.play.setVisible(true);
+                        }
+                    } else if (gamePanel.blackChess) {
+                        if (gamePanel.checkMate("black")) {
+                            GamePanel.whiteWon = true;
+                            GamePanel.gameRunning = false;
+                            GamePanel.play.setVisible(true);
                         }
                     }
 
-                    getTurn++;
+                    if ((gamePanel.whiteKingInvalidMoves() || gamePanel.blackKingInvalidMoves()) && (!gamePanel.whiteChess && !gamePanel.blackChess)){
+                        if (gamePanel.checkMate("white")) {
+                            GamePanel.staleMate = true;
+                            GamePanel.gameRunning = false;
+                            GamePanel.play.setVisible(true);
+                        }
+                    }
                 }
-                else imageCorner = new Point(initialPoint);
                 gamePanel.repaint();
+                gamePanel.whiteChess = false;
+                gamePanel.blackChess = false;
             }
+            hovering = false;
         }
+    }
+    public boolean validMove(int newImageX, int newImageY){
+        gamePanel.pieceMoved = false;
+        if(isLegalMove(newImageX / gamePanel.gameUnit, newImageY / gamePanel.gameUnit)) {
+            imageCorner = new Point(newImageX, newImageY);
+            legalMoveMade = true;
+
+            String tempColor = null;
+            boolean pieceKilled = false;
+
+
+            if(gamePanel.chessBoard[newImageY / gamePanel.gameUnit] [newImageX / gamePanel.gameUnit] != null){
+                tempColor = gamePanel.chessBoard[newImageY / gamePanel.gameUnit] [newImageX / gamePanel.gameUnit];
+                gamePanel.deadPiece = gamePanel.setDeadPiece(newImageX, newImageY);
+                imageCorner = new Point(newImageX, newImageY);
+                pieceKilled = true;
+            }
+
+            gamePanel.chessBoard[newImageY / gamePanel.gameUnit] [newImageX / gamePanel.gameUnit] = color;
+            gamePanel.chessBoard[(int)initialPoint.getY() / gamePanel.gameUnit] [(int)initialPoint.getX() / gamePanel.gameUnit] = null;
+
+            gamePanel.whiteChess = gamePanel.whiteChessCheck();
+            gamePanel.blackChess = gamePanel.blackChessCheck();
+
+            if((color.equals("white") && gamePanel.whiteChess) || (color.equals("black") && gamePanel.blackChess)) {
+                imageCorner = new Point(initialPoint);
+                gamePanel.chessBoard[(int) initialPoint.getY() / gamePanel.gameUnit][(int) initialPoint.getX() / gamePanel.gameUnit] = color;
+                gamePanel.chessBoard[newImageY / gamePanel.gameUnit][newImageX / gamePanel.gameUnit] = tempColor;
+                gamePanel.pieceMoved = false;
+
+                if(pieceKilled){
+                    gamePanel.setAlive(gamePanel.deadPiece, newImageX, newImageY);
+                }
+                return false;
+            }
+
+            if(pieceType.equals("pawn")){
+                if((int) imageCorner.getY() / gamePanel.gameUnit == 0 || (int) imageCorner.getY() / gamePanel.gameUnit == 7){
+                    gamePanel.upgradePiece(newImageX, newImageY);
+                    upgradingPiece = true;
+                }
+            }
+            gamePanel.pieceMoved = true;
+
+            return true;
+        }
+        else imageCorner = new Point(initialPoint);
+        gamePanel.checkWhite = false;
+        gamePanel.checkBlack = false;
+        return false;
     }
 
     private void dragPiece(Point currentPoint){
+        hovering = true;
+        if(!GamePanel.gameRunning) return;
         imageCorner.translate((int) (currentPoint.getX() - previousPoint.getX()),
                 ((int) (currentPoint.getY() - previousPoint.getY())));
 
@@ -138,7 +178,7 @@ public class Pieces implements ImageObserver{
             }
         }
     }
-    private boolean isLegalMove(int newImageX, int newImageY){
+    public boolean isLegalMove(int newImageX, int newImageY){
         if (newImageX > 7 || newImageX < 0 || newImageY >  7 || newImageY < 0) return false;
         if (gamePanel.checkKingCaptured(newImageX, newImageY)) return false;
 
@@ -147,21 +187,12 @@ public class Pieces implements ImageObserver{
         int initialX = (int) initialPoint.getX() / gamePanel.gameUnit;
         int initialY = (int) initialPoint.getY() / gamePanel.gameUnit;
 
+
         if(pieceType.equals("pawn") && color.equals("white")) {
-            if(initialY - 1 >= 0 && gamePanel.chessBoard[initialY - 1][initialX] == null) {
-                movableMap[initialY - 1][initialX] = true;
-            }
-            if(!pawnFirstMove && initialY - 2 >= 0 && gamePanel.chessBoard[initialY - 2][initialX] == null && gamePanel.chessBoard[initialY - 1][initialX] == null){
-                movableMap[initialY - 2][initialX] = true;
-            }
+            checkWhitePawnMove(movableMap, initialX, initialY);
             checkWhitePawnAttacking(movableMap, initialX, initialY, newImageX, newImageY);
         } else if(pieceType.equals("pawn") && color.equals("black")){
-            if (initialY + 1 >= 0 && gamePanel.chessBoard[initialY + 1][initialX] == null) {
-                movableMap[initialY + 1][initialX] = true;
-            }
-            if(!pawnFirstMove && initialY + 2 >= 0 && gamePanel.chessBoard[initialY + 2][initialX] == null && gamePanel.chessBoard[initialY + 1][initialX] == null){
-                movableMap[initialY + 2][initialX] = true;
-            }
+            checkBlackPawnMove(movableMap, initialX, initialY);
             checkBlackPawnAttacking(movableMap, initialX, initialY, newImageX, newImageY);
         } else if(pieceType.equals("rook")){
             checkLineMoovable(movableMap, initialX, initialY, newImageX, newImageY);
@@ -175,7 +206,26 @@ public class Pieces implements ImageObserver{
         } else if (pieceType.equals("king")) {
             checkMoovableKing(movableMap, initialX, initialY, newImageX, newImageY);
         }
+
         return movableMap[newImageY][newImageX];
+    }
+
+    public void checkWhitePawnMove(boolean[][] movableMap, int initialX, int initialY){
+        if(initialY - 1 >= 0 && gamePanel.chessBoard[initialY - 1][initialX] == null) {
+            movableMap[initialY - 1][initialX] = true;
+        }
+        if(!pawnFirstMove && initialY - 2 >= 0 && gamePanel.chessBoard[initialY - 2][initialX] == null && gamePanel.chessBoard[initialY - 1][initialX] == null){
+            movableMap[initialY - 2][initialX] = true;
+        }
+    }
+
+    public void checkBlackPawnMove(boolean[][] movableMap, int initialX, int initialY){
+        if (initialY + 1 >= 0 && gamePanel.chessBoard[initialY + 1][initialX] == null) {
+            movableMap[initialY + 1][initialX] = true;
+        }
+        if(!pawnFirstMove && initialY + 2 >= 0 && gamePanel.chessBoard[initialY + 2][initialX] == null && gamePanel.chessBoard[initialY + 1][initialX] == null){
+            movableMap[initialY + 2][initialX] = true;
+        }
     }
 
     public void chess(boolean[][] movableMap, int initialX, int initialY, int newImageX, int newImageY){
