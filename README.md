@@ -5,11 +5,6 @@ Welcome to the Chess Game! This is a simple chess game implementation with sever
 ## Table of Contents
 - [Features](#features)
 - [How to Play](#how-to-play)
-- [Timer](#timer)
-- [Setup](#setup)
-- [Dependencies](#dependencies)
-- [Contributing](#contributing)
-- [License](#license)
 
 ---
 
